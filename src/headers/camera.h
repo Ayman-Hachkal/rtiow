@@ -6,6 +6,7 @@ class camera {
   public:
     double aspect_ratio = 1.0; 
     int image_width = 100;
+    int samples_per_pixel = 10;
 
     void render(const hittable& world) {
       initialize();
@@ -14,12 +15,12 @@ class camera {
       for (int j {}; j < image_height; j++) {
         std::clog << "\rScanlines remaining " << (image_height - j) << ' ' << std::flush;
         for (int i {}; i <image_width; i++) {
-          auto pixel_center = pixel00_loc + (i * pixel_delta_u) + (j * pixel_delta_v);
-          auto ray_direction = pixel_center - center;
-          ray r(center, ray_direction);
-
-          color pixel_color = ray_color(r, world);
-          write_color(std::cout, pixel_color);
+          color pixel_color(0, 0, 0); 
+          for (int samples = 0; samples < samples_per_pixel; samples++) {
+            ray r = get_ray(i, j);
+            pixel_color += ray_color(r, world);
+          }
+          write_color(std::cout, pixel_samples_scale * pixel_color);
         }
       }
       std::clog << "\rDone.                  \n";
@@ -27,6 +28,7 @@ class camera {
 
   private:
     int image_height;
+    double pixel_samples_scale;
     point3 center;
     point3 pixel00_loc;
     vec3 pixel_delta_u;
@@ -35,6 +37,8 @@ class camera {
     void initialize() {
       image_height = int(image_width / aspect_ratio);
       image_height = (image_height < 1) ? 1 : image_height;
+
+      pixel_samples_scale = 1.0 / samples_per_pixel;
 
       center = point3(0, 0, 0);
 
@@ -51,6 +55,23 @@ class camera {
       auto viewport_upper_left = center - 
         vec3(0, 0, focal_length) - viewport_u/2 - viewport_v/2;
       pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
+    }
+
+    ray get_ray(int i, int j) const {
+        auto offset = samples_square();
+        auto pixel_sample = pixel00_loc
+          + ((i + offset.x()) * pixel_delta_u)
+          + ((j + offset.y()) * pixel_delta_v);
+
+        auto ray_origin = center;
+        auto ray_direction = pixel_sample - center;
+
+        return ray(ray_origin, ray_direction);
+    }
+
+    vec3 samples_square() const {
+      // Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square
+      return vec3(random_double() - 0.5, random_double() - 0.5, 0);
     }
 
     color ray_color(const ray& r, const hittable& world) const {
